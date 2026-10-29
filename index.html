@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Language Online Compiler</title>
+    <!-- CodeMirror Editor Styling -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/dracula.min.css">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Fira Code', 'Segoe UI', monospace;
+        }
+        body {
+            background-color: #0f111a;
+            color: #a9b1d6;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+        header {
+            background-color: #1a1b26;
+            padding: 12px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #24283b;
+        }
+        .logo {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #7aa2f7;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        select, button {
+            background-color: #24283b;
+            color: #c0caf5;
+            border: 1px solid #414868;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+        select:hover, button:hover {
+            border-color: #7aa2f7;
+        }
+        button.run-btn {
+            background-color: #9ece6a;
+            color: #1a1b26;
+            font-weight: bold;
+            border: none;
+        }
+        button.run-btn:hover {
+            background-color: #73daca;
+            transform: translateY(-1px);
+        }
+        .main-container {
+            display: flex;
+            flex: 1;
+            height: calc(100vh - 60px);
+        }
+        .editor-container {
+            flex: 1;
+            border-right: 2px solid #24283b;
+            display: flex;
+            flex-direction: column;
+        }
+        .CodeMirror {
+            height: 100% !important;
+            font-size: 14px;
+        }
+        .output-container {
+            flex: 1;
+            background-color: #16161e;
+            display: flex;
+            flex-direction: column;
+        }
+        .output-header {
+            background-color: #1a1b26;
+            padding: 10px 16px;
+            font-size: 0.85rem;
+            color: #565f89;
+            border-bottom: 2px solid #24283b;
+            display: flex;
+            justify-content: space-between;
+        }
+        #output {
+            padding: 20px;
+            font-family: 'Courier New', Courier, monospace;
+            white-space: pre-wrap;
+            overflow-y: auto;
+            flex: 1;
+            color: #7ce38b;
+        }
+        .error {
+            color: #f7768e !important;
+        }
+        .status-badge {
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 12px;
+            background-color: #24283b;
+            color: #7aa2f7;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">⚡ Code Runner Pro</div>
+        <div class="controls">
+            <select id="languageSelect">
+                <option value="python">Python 3</option>
+                <option value="c">C (GCC)</option>
+                <option value="cpp">C++ (G++)</option>
+                <option value="java">Java</option>
+                <option value="php">PHP</option>
+            </select>
+            <button class="run-btn" onclick="runCode()">▶ Run Code</button>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <div class="editor-container">
+            <textarea id="codeEditor"></textarea>
+        </div>
+        <div class="output-container">
+            <div class="output-header">
+                <span>TERMINAL OUTPUT</span>
+                <span class="status-badge" id="statusBadge">Ready</span>
+            </div>
+            <div id="output">Click 'Run Code' to execute your program...</div>
+        </div>
+    </div>
+
+    <!-- CodeMirror JS Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/python/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/clike/clike.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/php/php.min.js"></script>
+
+    <script>
+        const templates = {
+            python: `print("Hello, World!")\nfor i in range(5):\n    print(f"Step {i+1}")`,
+            c: `#include <stdio.h>\n\nint main() {\n    printf("=== C Compiler Test Successful! ===\\n");\n    int a = 15, b = 25;\n    printf("Math Test -> %d + %d = %d\\n", a, b, a + b);\n    for (int i = 1; i <= 5; i++) {\n        printf("Count: %d\\n", i);\n    }\n    return 0;\n}`,
+            cpp: `#include <iostream>\nusing namespace std;\n\nint main() {\n    cout << "Hello from C++!" << endl;\n    return 0;\n}`,
+            java: `public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello from Java!");\n    }\n}`,
+            php: `<?php\necho "Hello from PHP!\\n";\n$val = 10 * 5;\necho "Result: " . $val;\n?>`
+        };
+
+        // Wandbox compiler mappings
+        const compilerMap = {
+            python: "cpython-3.10.2",
+            c: "gcc-12.2.0",
+            cpp: "gcc-12.2.0",
+            java: "openjdk-15.0.1+9",
+            php: "php-8.2.0"
+        };
+
+        const languageConfig = {
+            python: { mode: "python" },
+            c: { mode: "text/x-csrc" },
+            cpp: { mode: "text/x-c++src" },
+            java: { mode: "text/x-java" },
+            php: { mode: "php" }
+        };
+
+        // Initialize CodeMirror Editor
+        const editor = CodeMirror.fromTextArea(document.getElementById("codeEditor"), {
+            lineNumbers: true,
+            theme: "dracula",
+            mode: "python"
+        });
+
+        editor.setValue(templates.python);
+
+        document.getElementById("languageSelect").addEventListener("change", function() {
+            const lang = this.value;
+            editor.setOption("mode", languageConfig[lang].mode);
+            editor.setValue(templates[lang]);
+        });
+
+        async function runCode() {
+            const outputDiv = document.getElementById("output");
+            const statusBadge = document.getElementById("statusBadge");
+            const selectedLang = document.getElementById("languageSelect").value;
+            const code = editor.getValue();
+
+            outputDiv.classList.remove("error");
+            outputDiv.innerText = "Compiling & Running via Wandbox...";
+            statusBadge.innerText = "Running";
+            statusBadge.style.color = "#e0af68";
+
+            try {
+                const response = await fetch("https://wandbox.org/api/compile.json", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        code: code,
+                        compiler: compilerMap[selectedLang]
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP Error! Status: ${response.status}`);
+                }
+
+                const result = await response.json();
+
+                if (result.status === "0") {
+                    outputDiv.innerText = result.program_output || "Executed successfully (No Output).";
+                    statusBadge.innerText = "Success";
+                    statusBadge.style.color = "#9ece6a";
+                } else {
+                    outputDiv.classList.add("error");
+                    outputDiv.innerText = result.compiler_error || result.program_error || result.program_output || "Compilation/Execution failed.";
+                    statusBadge.innerText = "Error";
+                    statusBadge.style.color = "#f7768e";
+                }
+            } catch (err) {
+                outputDiv.classList.add("error");
+                outputDiv.innerText = "Execution Error:\n" + err.message;
+                statusBadge.innerText = "Failed";
+                statusBadge.style.color = "#f7768e";
+            }
+        }
+    </script>
+</body>
+</html>
